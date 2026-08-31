@@ -1,32 +1,29 @@
-Almost — one real bug left in fetchAndBuildCache(), plus two minor cleanups. The getOrInitializeCache() method itself is solid (correct condition matching, proper stale-fallback that respects actual validity). Here's the full picture.
-The bug: missing null check on expiryNode 🔴
- 
-java
-Plain Text
-certNode = secret.get(cert_key);passNode = secret.get(password_key);expiryNode = secret.get(expiry_key); // ... later ... if (certNode == null || passNode == null) {   // ← checks cert and password    throw new IllegalArgumentException("Secret JSON missing required fields...");}// expiryNode is NEVER checked for null here! ...expiryDate = LocalDate.parse(expiryNode.asText());   // ← if expiryNode is null, this throws NullPointerException
-If the expiryDate field is ever missing from the secret (typo in the field name, someone forgot to add it during rotation, etc.), this throws a raw NullPointerException from inside the try block — which does get caught and wrapped:
- 
-java
-Plain Text
-} catch (Exception e) {    logger.log(Level.SEVERE, "Failed to decode base64 certificate data for: " + SECRET_NAME, e);    throw new RuntimeException("Failed to decode certificate data", e);}
-The problem isn't that it crashes (it does get caught) — it's that the log message is misleading. It'll say "Failed to decode base64 certificate data" when the actual problem is a missing expiryDate field. Whoever's debugging this at 2 AM during an incident will be looking in the wrong place (thinking the cert's Base64 encoding is broken, when really someone just forgot to add the expiry field to the secret).
-The fix
- 
-java
-Plain Text
-if (certNode == null || passNode == null) {    logger.log(Level.SEVERE, "Secret JSON missing required fields 'cert_base64' or 'jks_password' for: " + SECRET_NAME);    throw new IllegalArgumentException(            "Secret JSON missing required fields: 'cert_base64' or 'jks_password'");} // ADD THIS:if (expiryNode == null) {    logger.log(Level.SEVERE, "Secret JSON missing required field 'expiryDate' for: " + SECRET_NAME);    throw new IllegalArgumentException("Secret JSON missing required field: 'expiryDate'");}
+public class Util {
 
+	public SSLSocketFactory validateCertificate(Logger logger) {
 
-Minor cleanup: unused imports/fields
- 
-java
-Plain Text
-import java.time.Instant;                     // never used anywhereimport java.time.format.DateTimeFormatter;    // never used anywhere...private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");  // never used, and wrong pattern for your actual ISO format anyway
-Harmless — won't cause a runtime error, just dead code. Worth deleting for cleanliness, not a blocker.
-Everything else — genuinely solid ✅
-getOrInitializeCache() — correct double-checked locking, condition consistency between fast path and inside-lock check, and (importantly) the stale-fallback correctly only falls back if today.isBefore(result.expiryDate) — refuses to use an already-expired cert, which is the right call
-Static block ordering — correct (fetch happens before logging cache.expiryDate, no NPE risk here)
-Resource cleanup, logging detail — all good
-My verdict
-Add the expiryNode == null check, then yes, ship it. That's the one gap between this and being fully solid — right now a missing field produces a confusing/misleading error message instead of a clear one, which matters a lot during an actual incident when someone's trying to diagnose quickly. The unused imports are optional cleanup, not a blocker.
-Want me to give you the file back with just that one check added?
+		SSLSocketFactory sslSocketFactory =null;
+		try {
+			SSLContext context = SSLContext.getInstance("TLSv1.2");
+			logger.debug( "SSLContext created");
+//			ClassPathResource resource = new ClassPathResource("ADCBBANK.jks");
+//			File file = resource.getFile();
+//			KeyStore ks = KeyStore.getInstance("jks");
+//			FileInputStream fis = new FileInputStream(file);
+//			ks.load(fis, "password".toCharArray());
+			KeyStore ks = CertLoader.getKeyStore();
+			char[] password = CertLoader.getPassword();
+			KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
+			kmf.init(ks, password); // new code
+//			kmf.init(ks, "password".toCharArray());
+			context.init(kmf.getKeyManagers(), null, null);
+			sslSocketFactory = context.getSocketFactory();
+		}catch(Exception e) {
+			StringWriter str = new StringWriter();
+			e.printStackTrace(new PrintWriter(str));
+			logger.error(str.toString());
+		}
+
+		return sslSocketFactory;
+
+	}
