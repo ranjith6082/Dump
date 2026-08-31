@@ -1,0 +1,6 @@
+Created the separate jar to handle the jks certificate fetching from secret manager and loading. 
+Implemented the changes only for Get_CustomerProfileByCustID_SME Lambda.
+On the first hit, the lambda reads the cert from Secret Manager and stores it in cache.
+If a request comes within approximate 5 minutes (warm state), it uses the cache directly.
+If the gap is more than 5 minutes (cold state), the lambda reads the cert again from Secret Manager and stores it in cache. Remaining requests will then use that cache.
+If more requests come simultaniously, the lambda may create a new container (cold state). For the first hit in that container, it will read the cert from Secret Manager and store it in cache. Subsequent requests in that container will use the cache.
