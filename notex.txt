@@ -29,3 +29,11 @@ private static CertCache getOrInitializeCache() {
 
     return result;
 }
+
+
+private static boolean shouldRefresh(CertCache cache) {
+
+    LocalDate today = LocalDate.now(EXPIRY_ZONE);
+
+    return !today.isBefore(cache.expiryDate);
+}
