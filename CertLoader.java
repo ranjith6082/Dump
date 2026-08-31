@@ -1,4 +1,4 @@
-```java id="tf8otq"
+```java
 private static boolean isPastKnownExpiry(CertCache cache) {
 
     if (cache == null || cache.expiryDate == null) {
@@ -7,50 +7,25 @@ private static boolean isPastKnownExpiry(CertCache cache) {
 
     LocalDate today = LocalDate.now(EXPIRY_ZONE);
 
-    /*
-     * Returns true when:
-     *
-     * today >= expiryDate
-     *
-     * Example:
-     *
-     * Today      = 31-12-2026
-     * ExpiryDate = 31-12-2026
-     *
-     * Result = true
-     */
+    // Refresh when today is equal to or after the expiry date.
     return !today.isBefore(cache.expiryDate);
 }
 
 
 private static CertCache getOrInitializeCache() {
 
-    /*
-     * Read the current cache.
-     */
     CertCache result = cache;
 
-
     /*
-     * FAST PATH
-     *
-     * Condition 1:
-     * Cache must exist.
-     *
-     * Condition 2:
-     * Certificate expiry date must NOT be reached.
-     *
-     * If both conditions are satisfied,
-     * use the cached certificate.
+     * Cache is available and certificate has not reached
+     * the expiry date.
      */
     if (result != null && !isPastKnownExpiry(result)) {
 
-        int hitNumber = cacheHitCount.incrementAndGet();
+        cacheHitCount.incrementAndGet();
 
         logger.info(
-                "[CACHE HIT] Using cached cert/password - "
-                        + "no Secrets Manager call made (hit #"
-                        + hitNumber + ")"
+                "Using the certificate from cache."
         );
 
         return result;
@@ -58,39 +33,25 @@ private static CertCache getOrInitializeCache() {
 
 
     /*
-     * SLOW PATH
-     *
-     * Cache is NULL OR certificate expiry date has been reached.
-     *
-     * Synchronization prevents multiple threads inside
-     * the SAME Lambda container from loading the certificate
-     * at the same time.
+     * Cache is empty or the certificate has reached
+     * its expiry date.
      */
     synchronized (CertLoader.class) {
 
-        /*
-         * Read cache again after getting the lock.
-         *
-         * Another request may have loaded a valid certificate
-         * while this request was waiting for the lock.
-         */
+        // Check the cache again after acquiring the lock.
         result = cache;
 
 
         /*
-         * DOUBLE CHECK
-         *
-         * If another thread already loaded a valid certificate,
-         * use it and do not call Secrets Manager again.
+         * Another request may have loaded a valid certificate
+         * while this request was waiting for the lock.
          */
         if (result != null && !isPastKnownExpiry(result)) {
 
-            int hitNumber = cacheHitCount.incrementAndGet();
+            cacheHitCount.incrementAndGet();
 
             logger.info(
-                    "[CACHE HIT AFTER LOCK] Using valid certificate "
-                            + "already available in cache (hit #"
-                            + hitNumber + ")"
+                    "Using the certificate from cache after checking again."
             );
 
             return result;
@@ -98,56 +59,31 @@ private static CertCache getOrInitializeCache() {
 
 
         logger.info(
-                "[CACHE MISS] Cache is empty or expiry date reached - "
-                        + "fetching latest certificate from Secrets Manager "
-                        + "(attempt #"
-                        + (freshFetchCount.get() + 1)
-                        + ")"
+                "Loading the latest certificate from Secrets Manager."
         );
 
 
         try {
 
             /*
-             * IMPORTANT:
-             *
-             * Load the complete new certificate first.
-             *
-             * fetchAndBuildCache() should:
-             *
-             * 1. Read secret from Secrets Manager
-             * 2. Validate certificate
-             * 3. Validate password
-             * 4. Validate expiry date
-             * 5. Decode Base64
-             * 6. Load KeyStore
-             *
-             * Existing cache is NOT changed if any step fails.
+             * Load and validate the complete certificate before
+             * replacing the existing cache.
              */
             CertCache newCache = fetchAndBuildCache();
 
 
             /*
-             * Replace the old cache only after the
-             * new certificate was successfully loaded.
-             *
-             * volatile cache reference makes the new
-             * cache visible to other threads.
+             * Update the cache only after successful loading.
              */
             cache = newCache;
 
-
-            int fetchNumber =
-                    freshFetchCount.incrementAndGet();
+            freshFetchCount.incrementAndGet();
 
 
             logger.info(
-                    "[CACHE MISS] Fresh fetch complete - "
-                            + "cache successfully updated. "
-                            + "expiryDate="
+                    "Certificate loaded successfully and cache updated. "
+                            + "Expiry date: "
                             + newCache.expiryDate
-                            + ", fetch #"
-                            + fetchNumber
             );
 
 
@@ -158,36 +94,26 @@ private static CertCache getOrInitializeCache() {
 
             logger.log(
                     Level.SEVERE,
-                    "[CACHE FETCH FAILED] Failed to fetch "
-                            + "certificate from Secrets Manager.",
+                    "Unable to load the latest certificate from Secrets Manager.",
                     e
             );
 
 
             /*
-             * Read today's date again for fallback validation.
+             * Use the existing certificate only when it is
+             * still valid.
              */
             LocalDate today =
                     LocalDate.now(EXPIRY_ZONE);
 
 
-            /*
-             * If an old cache exists and is still valid,
-             * use it temporarily.
-             *
-             * IMPORTANT:
-             * Do NOT use this fallback if your security policy
-             * requires immediate failure when certificate
-             * refresh fails.
-             */
             if (result != null
                     && result.expiryDate != null
                     && today.isBefore(result.expiryDate)) {
 
                 logger.warning(
-                        "[CACHE FALLBACK] Latest certificate could not "
-                                + "be loaded, but existing certificate "
-                                + "is still valid. Using existing cache."
+                        "Latest certificate could not be loaded. "
+                                + "Using the existing valid certificate."
                 );
 
                 return result;
@@ -195,14 +121,11 @@ private static CertCache getOrInitializeCache() {
 
 
             /*
-             * Cache does not exist OR cached certificate
-             * is expired.
-             *
              * Do not use an expired certificate.
              */
             throw new RuntimeException(
-                    "Failed to load certificate from Secrets Manager "
-                            + "and no valid cached certificate is available.",
+                    "Certificate could not be loaded and no valid "
+                            + "certificate is available.",
                     e
             );
         }
