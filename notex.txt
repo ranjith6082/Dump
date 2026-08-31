@@ -1,39 +1,8 @@
-private static CertCache getOrInitializeCache() {
+CertCache newCache = fetchAndBuildCache();   // ← if this throws, no fallback exists
 
-    CertCache result = cache;
+cache = newCache;
 
-    if (result == null || shouldRefresh(result)) {
+freshFetchCount.incrementAndGet();
 
-        synchronized (CertLoader.class) {
-
-            result = cache;
-
-            if (result == null || shouldRefresh(result)) {
-
-                logger.info(
-                        "[CACHE REFRESH] Loading latest certificate from Secrets Manager"
-                );
-
-                CertCache newCache = fetchAndBuildCache();
-
-                cache = newCache;
-
-                freshFetchCount.incrementAndGet();
-
-                return newCache;
-            }
-        }
-    }
-
-    cacheHitCount.incrementAndGet();
-
-    return result;
-}
-
-
-private static boolean shouldRefresh(CertCache cache) {
-
-    LocalDate today = LocalDate.now(EXPIRY_ZONE);
-
-    return !today.isBefore(cache.expiryDate);
-}
+return newCache;
+ 
