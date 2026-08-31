@@ -298,7 +298,7 @@ public final class CertLoader {
         if (certNode == null || passNode == null || expiryNode == null) {
             logger.log(Level.SEVERE, "Secret JSON missing required fields 'cert_base64' or 'jks_password' for: " + SECRET_NAME);
             throw new IllegalArgumentException(
-                    "Secret JSON missing required fields: 'cert_base64' or 'jks_password'");
+            "Secret JSON missing required fields: certificate, password, or expiry date");
         }
 
         byte[] certBytes;
