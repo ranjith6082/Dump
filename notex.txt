@@ -1,8 +1,25 @@
-CertCache newCache = fetchAndBuildCache();   // ← if this throws, no fallback exists
+private static boolean isPastKnownExpiry(CertCache cache) {
+        LocalDate today = LocalDate.now(EXPIRY_ZONE);
+        return today.isAfter(cache.expiryDate);
+    }
 
-cache = newCache;
-
-freshFetchCount.incrementAndGet();
-
-return newCache;
- 
+    private static CertCache getOrInitializeCache() {
+        CertCache result = cache;
+        if (result == null || isPastKnownExpiry(result)) {
+            synchronized (CertLoader.class) {
+                result = cache;
+                if (result == null || isPastKnownExpiry(result)) {
+                    logger.info("[CACHE MISS] No cached value found - fetching fresh from Secrets Manager (attempt #"
+                            + (freshFetchCount.get() + 1) + ")");
+                    cache = result = fetchAndBuildCache();
+                    freshFetchCount.incrementAndGet();
+                    logger.info("[CACHE MISS] Fresh fetch complete - cache now populated, expiryDate="
+                            + result.expiryDate);
+                    return result;
+                }
+            }
+        }
+        int hitNumber = cacheHitCount.getAndIncrement();
+        logger.info("[CACHE HIT] Using cached cert/password - no Secrets Manager call made (hit #" + hitNumber + ")");
+        return result;
+    }
