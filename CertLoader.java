@@ -218,16 +218,16 @@ public final class CertLoader {
                  * use the existing certificate only when it
                  * is still valid.
                  */
-                if (!isPastKnownExpiry(result)) {
+                if (result != null && result.expiryDate != null && !isPastKnownExpiry(result)) {
 
-    logger.warning(
-            "The latest certificate could not be loaded, "
-            + "but the existing certificate is still valid. "
-            + "Continuing to use the existing certificate."
-    );
+			    logger.warning(
+			            "The latest certificate could not be loaded, "
+			            + "but the existing certificate is still valid. "
+			            + "Continuing to use the existing certificate."
+			    );
 
-    return result;
-}
+			    	return result;
+                }
  
  
                 /*
