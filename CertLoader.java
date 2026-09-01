@@ -1,226 +1,25 @@
-```text
-Util.java
-
-// API request calls the certificate validation method
-
-KeyStore ks = CertLoader.getKeyStore();
-char[] password = CertLoader.getPassword();
-
-
-COLD START / FIRST CLASS INITIALIZATION
-=======================================
-
-// When CertLoader class is initialized,
-// the static block runs only once per container
-
-static {
-
-    // Pre-load certificate data into cache
-
-    cache = fetchAndBuildCache();
-
-}
-
-
-// fetchAndBuildCache()
-
-// Fetch certificate, password and expiry date
-// from AWS Secrets Manager
-
-// Validate required fields
-
-// Decode Base64 certificate
-
-// Load certificate into KeyStore
-
-// Create cache containing:
-// KeyStore + Password + Expiry Date
-
-
-
-getOrInitializeCache(){
-
-1. Read current cache
-
-   CertCache result = cache;
-
-   ↓
-
-
-2. CONDITION 1: FAST PATH
-
-   (Is cache available AND certificate is valid?)
-
-   Valid means:
-
-   (today < expiryDate)
-
-
-   YES → Certificate is available and still valid
-
-         // Use existing cache
-
-         → return result
-
-
-   NO  → Cache is empty
-         OR expiry date is missing
-         OR certificate is expired
-
-         // Only then enter synchronized block
-
-         → Enter synchronized block
-
-
-
-   synchronized (CertLoader.class) {
-
-       // Only one thread can refresh the cache at a time
-
-       ↓
-
-
-3. Read cache again
-
-   result = cache;
-
-   // Another thread may have refreshed the cache
-   // while this thread was waiting for the lock
-
-   ↓
-
-
-4. CONDITION 2: CHECK CACHE AGAIN
-
-   (Is cache available now AND certificate is valid?)
-
-
-   YES → Another request may have already
-         loaded a valid certificate while
-         this request was waiting for the lock
-
-         // Use the refreshed cache
-
-         → return result
-
-
-   NO  → Cache is still empty
-         OR expiry date is missing
-         OR certificate is expired
-
-         // Load latest certificate
-
-         → Fetch latest certificate from
-           AWS Secrets Manager
-
-         → fetchAndBuildCache()
-
-
-
-       ↓
-
-
-5. CONDITION 3: NEW CERTIFICATE LOAD
-
-   (Was the new certificate loaded successfully?)
-
-
-   YES → New certificate is successfully loaded
-
-         // Replace old cache only after
-         // successful certificate loading
-
-         → Update cache
-
-         cache = newCache;
-
-         → return newCache
-
-
-   NO  → Latest certificate loading failed
-
-         // Try valid old cache as fallback
-
-         → Check old cached certificate
-
-
-
-       ↓
-
-
-6. CONDITION 4: OLD CACHE FALLBACK
-
-   (Is old cached certificate still valid?)
-
-
-   Valid means:
-
-   (Old cache exists
-    AND
-    expiry date exists
-    AND
-    today < expiryDate)
-
-
-   YES → Old certificate is still valid
-
-         // Continue using old valid cache
-
-         → return result
-
-
-   NO  → Old cache does not exist
-         OR expiry date is missing
-         OR old certificate is expired
-
-         // Do not use expired certificate
-
-         → No valid certificate is available
-
-         → throw exception
-
-
-   } // End synchronized block
-
-
-} // End getOrInitializeCache()
-
-
-
-Simple return summary
-=====================
-
-// Normal cache hit
-
-CONDITION 1 YES
-→ return result
-→ Use existing valid cache
-
-
-// Another thread already refreshed cache
-
-CONDITION 2 YES
-→ return result
-→ Use refreshed cached certificate
-
-
-// Latest certificate loaded successfully
-
-CONDITION 3 YES
-→ return newCache
-→ Use newly fetched certificate
-
-
-// Latest loading failed but old cache is valid
-
-CONDITION 4 YES
-→ return result
-→ Use old cache as fallback
-
-
-// No valid certificate available
-
-CONDITION 4 NO
-→ throw exception
-→ Fail request
-```
+START RequestId: 5b3aa800-5ff2-4756-89f4-8b01418f8b79 Version: $LATEST
+Error loading class com.adcb.cert.S3FileLambda: software/amazon/awssdk/core/SdkClient: java.lang.NoClassDefFoundError
+java.lang.NoClassDefFoundError: software/amazon/awssdk/core/SdkClient
+	at java.base/java.lang.ClassLoader.defineClass1(Native Method)
+	at java.base/java.lang.ClassLoader.defineClass(Unknown Source)
+	at java.base/java.security.SecureClassLoader.defineClass(Unknown Source)
+	at java.base/java.net.URLClassLoader.defineClass(Unknown Source)
+	at java.base/java.net.URLClassLoader$1.run(Unknown Source)
+	at java.base/java.net.URLClassLoader$1.run(Unknown Source)
+	at java.base/java.security.AccessController.doPrivileged(Unknown Source)
+	at java.base/java.net.URLClassLoader.findClass(Unknown Source)
+	at java.base/java.lang.ClassLoader.loadClass(Unknown Source)
+	at java.base/java.lang.ClassLoader.loadClass(Unknown Source)
+	at com.adcb.cert.S3FileLambda.<clinit>(S3FileLambda.java:16)
+	at java.base/java.lang.Class.forName0(Native Method)
+	at java.base/java.lang.Class.forName(Unknown Source)
+	at java.base/java.lang.Class.forName(Unknown Source)
+Caused by: java.lang.ClassNotFoundException: software.amazon.awssdk.core.SdkClient
+	at java.base/java.net.URLClassLoader.findClass(Unknown Source)
+	at java.base/java.lang.ClassLoader.loadClass(Unknown Source)
+	at java.base/java.lang.ClassLoader.loadClass(Unknown Source)
+	... 14 more
+
+END RequestId: 5b3aa800-5ff2-4756-89f4-8b01418f8b79
+REPORT RequestId: 5b3aa800-5ff2-4756-89f4-8b01418f8b79	Duration: 1248.31 ms	Billed Duration: 1542 ms	Memory Size: 128 MB	Max Memory Used: 94 MB	Init Duration: 293.05 ms	Status: error	Error Type: Runtime.ExitError
