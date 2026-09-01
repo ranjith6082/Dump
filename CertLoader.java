@@ -1,3 +1,43 @@
+```text
+Util.java
+
+// API request calls the certificate validation method
+
+KeyStore ks = CertLoader.getKeyStore();
+char[] password = CertLoader.getPassword();
+
+
+COLD START / FIRST CLASS INITIALIZATION
+=======================================
+
+// When CertLoader class is initialized,
+// the static block runs only once per container
+
+static {
+
+    // Pre-load certificate data into cache
+
+    cache = fetchAndBuildCache();
+
+}
+
+
+// fetchAndBuildCache()
+
+// Fetch certificate, password and expiry date
+// from AWS Secrets Manager
+
+// Validate required fields
+
+// Decode Base64 certificate
+
+// Load certificate into KeyStore
+
+// Create cache containing:
+// KeyStore + Password + Expiry Date
+
+
+
 getOrInitializeCache(){
 
 1. Read current cache
@@ -18,6 +58,8 @@ getOrInitializeCache(){
 
    YES → Certificate is available and still valid
 
+         // Use existing cache
+
          → return result
 
 
@@ -25,11 +67,15 @@ getOrInitializeCache(){
          OR expiry date is missing
          OR certificate is expired
 
+         // Only then enter synchronized block
+
          → Enter synchronized block
 
 
 
    synchronized (CertLoader.class) {
+
+       // Only one thread can refresh the cache at a time
 
        ↓
 
@@ -37,6 +83,9 @@ getOrInitializeCache(){
 3. Read cache again
 
    result = cache;
+
+   // Another thread may have refreshed the cache
+   // while this thread was waiting for the lock
 
    ↓
 
@@ -50,12 +99,16 @@ getOrInitializeCache(){
          loaded a valid certificate while
          this request was waiting for the lock
 
+         // Use the refreshed cache
+
          → return result
 
 
    NO  → Cache is still empty
          OR expiry date is missing
          OR certificate is expired
+
+         // Load latest certificate
 
          → Fetch latest certificate from
            AWS Secrets Manager
@@ -74,6 +127,9 @@ getOrInitializeCache(){
 
    YES → New certificate is successfully loaded
 
+         // Replace old cache only after
+         // successful certificate loading
+
          → Update cache
 
          cache = newCache;
@@ -82,6 +138,8 @@ getOrInitializeCache(){
 
 
    NO  → Latest certificate loading failed
+
+         // Try valid old cache as fallback
 
          → Check old cached certificate
 
@@ -106,7 +164,7 @@ getOrInitializeCache(){
 
    YES → Old certificate is still valid
 
-         → Continue using old cached certificate
+         // Continue using old valid cache
 
          → return result
 
@@ -114,6 +172,8 @@ getOrInitializeCache(){
    NO  → Old cache does not exist
          OR expiry date is missing
          OR old certificate is expired
+
+         // Do not use expired certificate
 
          → No valid certificate is available
 
@@ -124,27 +184,43 @@ getOrInitializeCache(){
 
 
 } // End getOrInitializeCache()
+
+
+
 Simple return summary
+=====================
+
+// Normal cache hit
+
 CONDITION 1 YES
 → return result
 → Use existing valid cache
 
 
+// Another thread already refreshed cache
+
 CONDITION 2 YES
 → return result
-→ Another request already refreshed the cache
+→ Use refreshed cached certificate
 
+
+// Latest certificate loaded successfully
 
 CONDITION 3 YES
 → return newCache
 → Use newly fetched certificate
 
 
+// Latest loading failed but old cache is valid
+
 CONDITION 4 YES
 → return result
 → Use old cache as fallback
 
 
+// No valid certificate available
+
 CONDITION 4 NO
 → throw exception
-→ No valid certificate is available
+→ Fail request
+```
