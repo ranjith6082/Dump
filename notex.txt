@@ -1,28 +1,43 @@
-If you have two Lambda functions, and each currently has 10 warm execution environments, then:
-
-After EventBridge is triggered/reloaded
-
-If EventBridge invokes both Lambdas, AWS can use their existing warm containers if they are still available.
-
-When a new request comes
-
-Case 1: A warm container is available
-➡️ Lambda uses one of the existing warm containers.
-➡️ No cold start.
-
-Case 2: All warm containers are busy
-➡️ Lambda creates a new container to handle the additional request.
-➡️ This can cause a cold start.
+The main issue with this approach is that you cannot directly refresh or replace all existing warm containers of Lambda A and Lambda B.
 
 Simple example
 
-Lambda A has 10 warm containers:
+Initially:
 
-5 containers are currently busy
-5 containers are idle/warm
+Lambda A → 10 warm containers → all have old certificate V1
+Lambda B → 10 warm containers → all have old certificate V1
 
-A new request comes → one of the 5 available warm containers can be reused.
+Certificate is updated:
 
-But if all 10 are busy and request number 11 arrives concurrently → AWS may create a new execution environment.
+V1 → V2
 
-Important: EventBridge does not normally force all existing warm containers to restart or refresh. Warm containers can continue being reused until AWS eventually retires them.
+EventBridge triggers:
+
+Refresh Controller → Lambda A and Lambda B
+
+You expect:
+
+All old warm containers → replaced with new containers containing V2
+
+What actually happens
+
+Suppose after refresh, a new API request comes to Lambda A.
+
+AWS may send that request to one of the existing 10 warm containers.
+
+That warm container still has:
+
+Certificate V1 ❌
+
+It does not automatically guarantee that AWS creates a new container.
+
+A new execution environment with V2 is created only when Lambda needs additional capacity (for example, existing containers are busy).
+
+Main issue
+
+Your refresh Lambda cannot force AWS Lambda to replace every existing warm container.
+
+So after certificate rotation:
+
+Old warm container → may still serve requests with V1
+New container → reads and uses V2
