@@ -1,43 +1,60 @@
-The main issue with this approach is that you cannot directly refresh or replace all existing warm containers of Lambda A and Lambda B.
+No. Executing EventBridge or invoking a “Refresh Lambda” does not automatically destroy existing warm containers.
 
-Simple example
+Example
 
-Initially:
+Initially, one Lambda has:
 
-Lambda A → 10 warm containers → all have old certificate V1
-Lambda B → 10 warm containers → all have old certificate V1
+Lambda
+├── Warm Container 1 → Certificate V1
+├── Warm Container 2 → Certificate V1
+└── Warm Container 3 → Certificate V1
 
 Certificate is updated:
 
 V1 → V2
 
-EventBridge triggers:
+Then:
 
-Refresh Controller → Lambda A and Lambda B
+EventBridge
+    ↓
+Refresh Lambda
+    ↓
+Invoke/refresh Lambda
+What happens next?
 
-You expect:
+The three old warm containers are not automatically destroyed.
 
-All old warm containers → replaced with new containers containing V2
+Lambda
+├── Warm Container 1 → V1 (still may exist)
+├── Warm Container 2 → V1 (still may exist)
+└── Warm Container 3 → V1 (still may exist)
 
-What actually happens
+When a new API request comes:
 
-Suppose after refresh, a new API request comes to Lambda A.
+New API Request
+       ↓
+Lambda
+       ↓
+AWS chooses an available execution environment
+       ↓
+May use Container 1 → V1 ❌
 
-AWS may send that request to one of the existing 10 warm containers.
+Or, if additional capacity is required:
 
-That warm container still has:
+New API Request
+       ↓
+All existing containers busy
+       ↓
+AWS creates Container 4
+       ↓
+Container 4 reads V2 ✅
+Important conclusion
+EventBridge Refresh
+       ❌
+does NOT mean
+       ↓
+Destroy old warm containers
+       ↓
+Force new containers
 
-Certificate V1 ❌
-
-It does not automatically guarantee that AWS creates a new container.
-
-A new execution environment with V2 is created only when Lambda needs additional capacity (for example, existing containers are busy).
-
-Main issue
-
-Your refresh Lambda cannot force AWS Lambda to replace every existing warm container.
-
-So after certificate rotation:
-
-Old warm container → may still serve requests with V1
-New container → reads and uses V2
+AWS Lambda manages the lifecycle of warm containers. Simply invoking a Lambda cannot force AWS to terminate all existing warm containers or guarantee that the next request uses a new container.
