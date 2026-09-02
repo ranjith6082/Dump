@@ -1,29 +1,28 @@
-public class Util {
+Example
 
-	public SSLSocketFactory validateCertificate(Logger logger) {
+Suppose you have:
 
-		SSLSocketFactory sslSocketFactory =null;
-		try {
-			SSLContext context = SSLContext.getInstance("TLSv1.2");
-			logger.debug( "SSLContext created");
-//			ClassPathResource resource = new ClassPathResource("ADCBBANK.jks");
-//			File file = resource.getFile();
-//			KeyStore ks = KeyStore.getInstance("jks");
-//			FileInputStream fis = new FileInputStream(file);
-//			ks.load(fis, "password".toCharArray());
-			KeyStore ks = CertLoader.getKeyStore();
-			char[] password = CertLoader.getPassword();
-			KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
-			kmf.init(ks, password); // new code
-//			kmf.init(ks, "password".toCharArray());
-			context.init(kmf.getKeyManagers(), null, null);
-			sslSocketFactory = context.getSocketFactory();
-		}catch(Exception e) {
-			StringWriter str = new StringWriter();
-			e.printStackTrace(new PrintWriter(str));
-			logger.error(str.toString());
-		}
+Lambda A:
+A1 (warm container) → Cert-V1
+A2 (warm container) → Cert-V1
 
-		return sslSocketFactory;
+Lambda B:
+B1 (warm container) → Cert-V1
+B2 (warm container) → Cert-V1
 
-	}
+Now the certificate changes:
+
+Cert-V1 → Cert-V2
+
+EventBridge triggers:
+
+Lambda A → one invocation → A1 → Cert-V2 ✅
+Lambda B → one invocation → B1 → Cert-V2 ✅
+
+But the other warm containers may still have:
+
+A2 → Cert-V1 ❌
+B2 → Cert-V1 ❌
+Why?
+
+Because one Lambda invocation is handled by one execution environment. The trigger is not broadcast to all existing warm containers, and each warm container has its own separate memory.
