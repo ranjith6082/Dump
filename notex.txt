@@ -1,66 +1,81 @@
-Initial state
+What EventBridge is useful for
 
-You have one Lambda with 3 warm containers:
+EventBridge is useful to detect that the certificate has changed and trigger a workflow:
+
+Certificate V1 → V2
+       │
+       ▼
+EventBridge detects update
+       │
+       ▼
+Trigger Refresh Controller
+
+But EventBridge does not control Lambda warm containers.
+
+Your example
+
+Initially:
 
 Lambda A
 
-Container 1 → Cached Certificate V1
-Container 2 → Cached Certificate V1
-Container 3 → Cached Certificate V1
-Certificate is updated
-Secrets Manager
+Container 1 → V1 (idle)
+Container 2 → V1 (idle)
+Container 3 → V1 (busy)
+
+Certificate changes:
+
 V1 → V2
-       │
-       ▼
+
+EventBridge triggers the Refresh Controller.
+
+What EventBridge does
 EventBridge
-       │
-       ▼
-Refresh Controller Lambda
-       │
-       ▼
-Invoke Lambda A
-What you expect
-Destroy V1 containers
-        ↓
-Create new containers
-        ↓
-All containers use V2
-What actually happens
-
-Lambda may reuse an existing container:
-
-Refresh invocation
-       ↓
-Container 2
-       ↓
-Reload certificate V2
-
-Now:
-
-Container 1 → V1 ❌
-Container 2 → V2 ✅
-Container 3 → V1 ❌
-
-A new API request can still go to:
-
+    ↓
+Trigger your Lambda/function/workflow
+What EventBridge does NOT do
+❌ Destroy Container 1
+❌ Destroy Container 2
+❌ Destroy Container 3
+❌ Clear their Java cache
+❌ Force the next request into a new container
+After refresh, a new API request arrives
+Case 1: Idle warm container exists
 New Request
-    ↓
-Container 1
-    ↓
-Uses V1 ❌
-Main problem
+     ↓
+Container 1 (already warm)
+     ↓
+Uses cached V1 ❌
 
-Your refresh request cannot guarantee that all existing warm containers are refreshed.
+AWS may reuse the idle warm container.
 
-Each Lambda warm container has its own separate cache and memory.
+Case 2: All existing containers are busy
+New Request
+     ↓
+All warm containers busy
+     ↓
+AWS creates Container 4
+     ↓
+Container initialization
+     ↓
+Reads Certificate V2 ✅
+So what is the real use of EventBridge here?
 
-Simple conclusion
-EventBridge → Detect certificate update ✅
+EventBridge is the notification/trigger mechanism:
 
-Refresh one Lambda invocation → Possible refresh of one container ✅
+Certificate Updated
+       ↓
+EventBridge
+       ↓
+Start your update workflow
 
-Refresh ALL warm containers → Not guaranteed ❌
+It is not a Lambda container refresh mechanism.
 
-Destroy ALL warm containers → Not directly supported ❌
+Your two issues are correct
+Issue	What happens
+Old warm containers	Continue to exist and may have V1
+New request	Can reuse an idle warm container with V1
+New container	Reads V2 during initialization
+EventBridge	Detects/triggers update but cannot clear warm-container memory
+Final conclusion
 
-So for your requirement, EventBridge is good for detecting the certificate update, but it alone cannot guarantee that every warm container immediately switches from V1 to V2.
+EventBridge tells your application that the certificate changed. It does not force AWS Lambda to destroy or refresh all warm containers.
