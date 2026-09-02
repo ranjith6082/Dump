@@ -1,28 +1,61 @@
-Example
+                 Certificate Updated
+                        │
+                        ▼
+                Secrets Manager
+                Version V1 → V2
+                        │
+                        ▼
+              ┌───────────────────┐
+              │   API Request     │
+              └─────────┬─────────┘
+                        │
+                        ▼
+              Lambda Warm Container
+                        │
+                        ▼
+        Get Cached Certificate Version
+                 Cached = V1
+                        │
+                        ▼
+       Check Current Secret Version
+       Secrets Manager = V2
+                        │
+                        ▼
+                Versions Same?
+                 /           \
+               YES            NO
+                │              │
+                ▼              ▼
+       Use Cached Cert     Read New Certificate
+                              │
+                              ▼
+                       Build/Reload KeyStore
+                              │
+                              ▼
+                     Update Cache to V2
+                              │
+                              ▼
+                    Use New Certificate
 
-Suppose you have:
 
-Lambda A:
-A1 (warm container) → Cert-V1
-A2 (warm container) → Cert-V1
 
-Lambda B:
-B1 (warm container) → Cert-V1
-B2 (warm container) → Cert-V1
+Before certificate update:
 
-Now the certificate changes:
+Container 1 → V1
+Container 2 → V1
 
-Cert-V1 → Cert-V2
 
-EventBridge triggers:
+Certificate updated:
 
-Lambda A → one invocation → A1 → Cert-V2 ✅
-Lambda B → one invocation → B1 → Cert-V2 ✅
+Secrets Manager → V2
 
-But the other warm containers may still have:
 
-A2 → Cert-V1 ❌
-B2 → Cert-V1 ❌
-Why?
+Next API requests:
 
-Because one Lambda invocation is handled by one execution environment. The trigger is not broadcast to all existing warm containers, and each warm container has its own separate memory.
+Request → Container 1
+          V1 ≠ V2
+          → Reload V2 ✅
+
+Request → Container 2
+          V1 ≠ V2
+          → Reload V2 ✅
