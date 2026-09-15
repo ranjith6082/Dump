@@ -1,81 +1,49 @@
-What EventBridge is useful for
+String acctOpeningLimit = (String)iceGlobalConfig.getConfig().getParamValue(Constants.CUI_ACCOUNT_COMPLETION_YEAR_LIMIT);
+			if(logger.isDebugEnabled()){WriteLog.write(WriteLog.DEBUG,session_ID_, "Account Opening limit is "+ acctOpeningLimit);}
 
-EventBridge is useful to detect that the certificate has changed and trigger a workflow:
+			String strNewAccountLimit = (String)iceGlobalConfig.getConfig().getParamValue(Constants.CUI_NEW_ACCOUNT_LIMIT);
+			if(logger.isDebugEnabled()){WriteLog.write(WriteLog.DEBUG,session_ID_, "Cutomer new account limit is "+ strNewAccountLimit);}
+			//END Rule Engine Updation
 
-Certificate V1 → V2
-       │
-       ▼
-EventBridge detects update
-       │
-       ▼
-Trigger Refresh Controller
 
-But EventBridge does not control Lambda warm containers.
+			/**
+			 * Rule engine update
+			 */
 
-Your example
 
-Initially:
+			ICERuleParam ruleParamObj = (ICERuleParam)callInfo.getICERuleParam();
+			
 
-Lambda A
+			if(util.isNullOrEmpty(ruleParamObj)){
+				if(logger.isDebugEnabled()){WriteLog.write(WriteLog.DEBUG,session_ID_, "***********Rule Engine Object is null or empty*************" + ruleParamObj);}
+			}
 
-Container 1 → V1 (idle)
-Container 2 → V1 (idle)
-Container 3 → V1 (busy)
+			//			ArrayList<String>lastSelMobnNoList = new ArrayList<>();
+			//			
+			//			lastSelMobnNoList = iceGlobalConfig.getConfig().getParamValue(Constants.RULE_ENGINE_TOP_UP_MOBILE_NO)!= null ? (String)iceGlobalConfig.getConfig().getParamValue(Constants.RULE_ENGINE_TOP_UP_MOBILE_NO) : Constants.ZERO;
 
-Certificate changes:
+			if(!util.isNullOrEmpty(acctOpeningLimit)){
 
-V1 → V2
+				Calendar cal1 = Calendar.getInstance();
+				if(logger.isDebugEnabled()){WriteLog.write(WriteLog.DEBUG,session_ID_, "Today's Date is " + cal1.getTime());}
 
-EventBridge triggers the Refresh Controller.
+				cal1.add(Calendar.YEAR, -Integer.parseInt(acctOpeningLimit));
+				if(logger.isDebugEnabled()){WriteLog.write(WriteLog.DEBUG,session_ID_, "After neglecting the acct opening limit is " + cal1.getTime());}
 
-What EventBridge does
-EventBridge
-    ↓
-Trigger your Lambda/function/workflow
-What EventBridge does NOT do
-❌ Destroy Container 1
-❌ Destroy Container 2
-❌ Destroy Container 3
-❌ Clear their Java cache
-❌ Force the next request into a new container
-After refresh, a new API request arrives
-Case 1: Idle warm container exists
-New Request
-     ↓
-Container 1 (already warm)
-     ↓
-Uses cached V1 ❌
+				Date todayDate = Calendar.getInstance().getTime();
+				if(logger.isDebugEnabled()){WriteLog.write(WriteLog.DEBUG,session_ID_, "Today's Date is  " + todayDate);}
+				Date manipulatedDate = cal1.getTime();
+				if(logger.isDebugEnabled()){WriteLog.write(WriteLog.DEBUG,session_ID_, "Manipulated Date is  " + manipulatedDate);}
 
-AWS may reuse the idle warm container.
+				long compare= todayDate.getTime() - manipulatedDate.getTime();
+				compare=compare/(24*60*60*1000);
+				if(logger.isDebugEnabled()){WriteLog.write(WriteLog.DEBUG,session_ID_, "Compare result of two days are " + compare);}
 
-Case 2: All existing containers are busy
-New Request
-     ↓
-All warm containers busy
-     ↓
-AWS creates Container 4
-     ↓
-Container initialization
-     ↓
-Reads Certificate V2 ✅
-So what is the real use of EventBridge here?
+				//				int acctOpenDays= cal1.get(Calendar.YEAR);
+				//				int currentDays = Calendar.getInstance().get(Calendar.YEAR);
+				//				int resultDays = currentDays - acctOpenDays;
+				//				
+				if(logger.isDebugEnabled()){WriteLog.write(WriteLog.DEBUG,session_ID_, "No Of Days" + compare);}
+				ruleParamObj.setIVRParam(Constants.RULE_ACCOUNT_TENUREDATE_ANNC_RANGE, compare+Constants.EMPTY);
 
-EventBridge is the notification/trigger mechanism:
-
-Certificate Updated
-       ↓
-EventBridge
-       ↓
-Start your update workflow
-
-It is not a Lambda container refresh mechanism.
-
-Your two issues are correct
-Issue	What happens
-Old warm containers	Continue to exist and may have V1
-New request	Can reuse an idle warm container with V1
-New container	Reads V2 during initialization
-EventBridge	Detects/triggers update but cannot clear warm-container memory
-Final conclusion
-
-EventBridge tells your application that the certificate changed. It does not force AWS Lambda to destroy or refresh all warm containers.
+			}
