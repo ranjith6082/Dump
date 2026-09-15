@@ -1,0 +1,143 @@
+TenureAlertUpdate
+-----------------
+
+rule name -> RuleAccountOpenedYears  -> call feature and return -> TenureAlertUpdate
+
+RuleAccountOpenedYears
+@AccountOpenedDaysCount >= @AcctTenureDateAnncRange
+
+15-09-2025
+15-09-2026
+
+@AccountOpenedDaysCount
+
+datediff(@Today,@AccountOpeningDate, 'true')
+
+
+datediff(@Today , @AccountOpeningDate , true)
+datediff('2026-09-15','202109150000',true) = 1826 - Inclusive difference
+
+@Today
+getDate() - 2026-09-15 00:00:00
+
+FEED_CUSTDETAILS → account info (opening date)
+
+INSERT INTO FEED_CUSTDETAILS (COLUMN1, COLUMN3)
+VALUES ('00914461084120', '2021-09-15');
+
+INSERT INTO FEED_CUSTDETAILS (COLUMN1, COLUMN3)
+VALUES ('00914461084120', '20210915000000');
+
+SELECT COLUMN3 FROM FEED_CUSTDETAILS WHERE COLUMN1 = '00914461084120';
+
+@AccountOpeningDate
+select COLUMN3 from FEED_CUSTDETAILS where COLUMN1 = @ANI
+COLUMN3 - AccountOpeningDate based on regd_mobileno
+
+Account_Completion_Year_Limit
+"Account Opening limit is " = 5year
+
+Capture today and manipulated date
+Date todayDate = Calendar.getInstance().getTime();   // 2026-09-15
+Date manipulatedDate = cal1.getTime();               // 2025-09-15
+
+Difference calculation
+long compare = todayDate.getTime() - manipulatedDate.getTime();
+Divide by 86,400,000 → 1826 days.
+
+compare = compare / (24*60*60*1000);
+Result = 1826 days (exclusive).
+compare = 1826
+
+Sets RULE_ACCOUNT_TENUREDATE_ANNC_RANGE = "1826" (string).
+
+------------------------------
+@AcctTenureDateAnncRange
+Account Opening Limit = 5 year
+calculates value
+RULE_ACCOUNT_TENUREDATE_ANNC_RANGE = 1826
+
+
+
+1 year	2025‑09‑15	366		Includes leap year 2024 (365 + 1)
+2 years	2024‑09‑15	731		Covers 2024 leap year (730 + 1)
+3 years	2023‑09‑15	1096	Includes leap year 2024 (1095 + 1)
+4 years	2022‑09‑15	1461	Includes leap year 2024 (1460 + 1)
+5 years	2021‑09‑15	1826	Includes leap year 2024 (1825 + 1)
+
+-------------------------------------
+
+@AccountOpenedDaysCount >= @AcctTenureDateAnncRange
+call TenureAlertUpdate feature if condition true
+
+Framing the audio prompt announce audio and updates in db.
+FEED_TENUREANNOUNCED - current_datetime(20260911123245) and regd_mobileno
+
+INSERT INTO FEED_TENUREANNOUNCED (regd_mobileno, current_datetime)
+VALUES ('00914461084120', '20260915105400');
+
+FEED_TENUREANNOUNCED → announcement history (prevents repeats).
+
+Breakdown
+yyyy → 2026
+MM → 09 (September)
+dd → 11 (day of month)
+HH → 12 (hour in 24-hour format)
+mm → 32 (minutes)
+ss → 45 (seconds)
+
+
+TenureAlert
+-----------
+
+rule name -> RuleAccountOpenedYears  -> call feature and return -> TenureAlertUpdate
+
+RuleAccountOpenedYears
+@AccountOpenedDaysCount >= @AcctTenureDateAnncRange
+
+@AccountOpenedDaysCount
+datediff(@Today , @AccountOpeningDate , true)
+
+@Today
+getDate()
+
+@AccountOpeningDate
+select COLUMN3 from FEED_CUSTDETAILS where COLUMN1 = @ANI
+COLUMN3 - AccountOpeningDate based on regd_mobileno
+
+@AcctTenureDateAnncRange
+Account Opening Limit = 1 year
+calculates value
+RULE_ACCOUNT_TENUREDATE_ANNC_RANGE = 365
+
+1 year - 365
+2 years - 730
+3 years - 1095
+4 years - 1460
+5 years - 1826 
+
+@AccountOpenedDaysCount >= @AcctTenureDateAnncRange
+call TenureAlert feature if condition true
+
+IsNewlyOpenedAccount
+ACCOUNT OPENED X YEARS: 1 year
+accountOpeningDate = callInfo.getField(Field.AccountOpeningDate) != null ? (String)callInfo.getField(Field.AccountOpeningDate) : Constants.EMPTY_STRING;
+
+CallerIdentificationImpl.java
+callInfo.setField(Field.AccountOpeningDate, accountOpeningDate);
+
+NEWLY OPENED ACCOUNT:
+
+
+--------------------
+
+Step-by-step meaning
+Account Opening Date → e.g., 15‑09‑2025.
+
+Completion of 1 year → 15‑09‑2026.
+
+One month after completion → 15‑10‑2026.
+
+Condition becomes true → only from 15‑10‑2026 onwards, the IVR should play the audio.
+
+So the announcement is delayed by one month after the anniversary milestone.
